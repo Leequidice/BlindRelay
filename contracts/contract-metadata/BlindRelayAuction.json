@@ -1,0 +1,873 @@
+{
+  "contractAddress": "0x27bcab80f486030dec9702d287e354a69bab186d",
+  "network": "ARC-TESTNET",
+  "deployerWalletId": "3c2464b2-8369-52e2-a782-800bbeca5396",
+  "contract_code_path": "/home/user/app/contracts/BlindRelayAuction.sol",
+  "contract_compiled_code_path": "/home/user/app/contracts/out/BlindRelayAuction.sol/BlindRelayAuction.json",
+  "contract_network_and_links": {
+    "Arc Testnet": "https://explorer.testnet.arc.io/address/0x27bcab80f486030dec9702d287e354a69bab186d"
+  },
+  "contract_deployments": [
+    {
+      "chain": "Arc Testnet",
+      "address": "0x27bcab80f486030dec9702d287e354a69bab186d",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x27bcab80f486030dec9702d287e354a69bab186d",
+      "txHash": "0xca7980e7da0ae8a99e3f3a186cc76c2eb848d4faf48e47c7a9b65d627b1eb3db",
+      "deployedAt": "2026-10-23T22:31:14.818Z"
+    },
+    {
+      "chain": "Arc Testnet",
+      "address": "0x021a8260652342c5866cacf81a9c0f5921f91f7b",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x021a8260652342c5866cacf81a9c0f5921f91f7b",
+      "txHash": "0x4740d9255e71a556a513c5a834bf077c08f168b273c69c49f8f2ef73dcfcf270",
+      "deployedAt": "2026-10-23T22:12:17.189Z"
+    },
+    {
+      "chain": "Arc Testnet",
+      "address": "0x7c6446cf8107723dc16e45023491f6b7091fd345",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x7c6446cf8107723dc16e45023491f6b7091fd345",
+      "txHash": "0x813a282360888704b885107a977e1fbb67d34136a300296d46e11dee6db4df19",
+      "deployedAt": "2026-10-21T14:33:51.193Z"
+    },
+    {
+      "chain": "Arc Testnet",
+      "address": "0x7ea51a659e48711bf7c060fd0027ec2f83d08569",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x7ea51a659e48711bf7c060fd0027ec2f83d08569",
+      "txHash": "0x21c88a13118292636cede232fd7a22cab5547956e7285670ee5a47e8c033d4d6",
+      "deployedAt": "2026-10-21T14:08:56.291Z"
+    }
+  ],
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "usdc_",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "escrow_",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "GAS_FLOOR",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_BIDDERS",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_DELIVERY_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_REVIEW_WINDOW",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MIN_DELIVERY_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MIN_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MIN_REVIEW_WINDOW",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "auctionCount",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "auctions",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "buyer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "budget",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "bondAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "bestPrice",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "bestBidder",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "commitEnd",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "revealEnd",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "deliveryDuration",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "reviewWindow",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "taskHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "status",
+          "type": "uint8",
+          "internalType": "enum BlindRelayAuction.AuctionStatus"
+        },
+        {
+          "name": "commitCounter",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "commitBid",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "createAuction",
+      "inputs": [
+        {
+          "name": "budget",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "commitDuration",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "revealDuration",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "bondAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "deliveryDuration",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "reviewWindow",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "taskHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "escrow",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "finalize",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getAuction",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "v",
+          "type": "tuple",
+          "internalType": "struct BlindRelayAuction.AuctionView",
+          "components": [
+            {
+              "name": "buyer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "budget",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "bondAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "bestPrice",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "bestBidder",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "commitEnd",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "revealEnd",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "deliveryDuration",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "reviewWindow",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "taskHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "status",
+              "type": "uint8",
+              "internalType": "enum BlindRelayAuction.AuctionStatus"
+            },
+            {
+              "name": "commitCounter",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "bidderCount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getBid",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "bidder",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "commitOrder",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "hasRevealed",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getBidders",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]",
+          "internalType": "address[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingBalances",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "phaseOf",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "revealBid",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "salt",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "usdc",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "withdraw",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "AuctionCancelled",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "reason",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AuctionCreated",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "buyer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "budget",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "bondAmount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "commitEnd",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        },
+        {
+          "name": "revealEnd",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        },
+        {
+          "name": "deliveryDuration",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        },
+        {
+          "name": "reviewWindow",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        },
+        {
+          "name": "taskHash",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AuctionFinalized",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "winner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "taskId",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BidCommitted",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "bidder",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "commitOrder",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BidRevealed",
+      "inputs": [
+        {
+          "name": "auctionId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "bidder",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "Withdrawn",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AlreadyCommitted",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AlreadyRevealed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BuyerCannotBid",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DeliveryDurationTooLong",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DeliveryDurationTooShort",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DurationOutOfRange",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InsufficientGasForFinalize",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidReveal",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotAContract",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotActive",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotCommitPhase",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotCommitted",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotRevealPhase",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NothingToWithdraw",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "PriceTooHigh",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ReentrancyGuardReentrantCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RevealNotEnded",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ReviewWindowTooLong",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ReviewWindowTooShort",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SafeERC20FailedOperation",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "TooManyBidders",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAddress",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroBidPrice",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroBond",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroBudget",
+      "inputs": []
+    }
+  ]
+}

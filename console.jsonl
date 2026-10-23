@@ -1,0 +1,6 @@
+{"level":"debug","message":"[vite] connected.","timestamp":1792588820285}
+{"level":"error","message":"[vite] failed to connect to websocket.\nyour current setup:\n  (browser) i5ybi6ulq0ntskex40184.preview.studio.arc.io/ <--[HTTP]--> localhost:5173/ (server)\n  (browser) i5ybi6ulq0ntskex40184.preview.studio.arc.io:/ <--[WebSocket (failing)]--> localhost:5173/ (server)\nCheck out your Vite / network configuration and https://vite.dev/config/server-options.html#server-hmr .","timestamp":1792588845456}
+{"level":"debug","message":"[vite] connected.","timestamp":1792588845787}
+{"level":"debug","message":"[vite] connected.","timestamp":1792589004759}
+{"level":"error","message":"[vite] failed to connect to websocket.\nyour current setup:\n  (browser) i5ybi6ulq0ntskex40184.preview.studio.arc.io/ <--[HTTP]--> localhost:5173/ (server)\n  (browser) i5ybi6ulq0ntskex40184.preview.studio.arc.io:/ <--[WebSocket (failing)]--> localhost:5173/ (server)\nCheck out your Vite / network configuration and https://vite.dev/config/server-options.html#server-hmr .","timestamp":1792589004805}
+{"level":"debug","message":"[vite] connected.","timestamp":1792589721737}
