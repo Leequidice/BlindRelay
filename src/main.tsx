@@ -21,6 +21,7 @@ import { ConnectKitProvider } from 'connectkit'
 import { Toaster } from 'sonner'
 import { config } from './config'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './index.css'
 
 const queryClient = new QueryClient()
@@ -66,17 +67,25 @@ const StudioWatermark = () => (
   </a>
 )
 
-createRoot(document.getElementById('root')!).render(
+// Guard against double-mount during Vite HMR (createRoot must only be called once per container).
+const rootEl = document.getElementById('root')!
+const existingRoot = (rootEl as { _reactRoot?: ReturnType<typeof createRoot> })._reactRoot
+const appRoot = existingRoot ?? createRoot(rootEl);
+(rootEl as { _reactRoot?: ReturnType<typeof createRoot> })._reactRoot = appRoot
+
+appRoot.render(
   <StrictMode>
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <ConnectKitProvider>
-          <App />
-          <StudioWatermark />
-          <Toaster position="top-center" />
-        </ConnectKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <ErrorBoundary>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <ConnectKitProvider>
+            <App />
+            <StudioWatermark />
+            <Toaster position="top-center" />
+          </ConnectKitProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )
 
