@@ -1,7 +1,7 @@
 /**
- * BlindRelayAuction end-to-end integration script — Arc Testnet
+ * BlindRelayAuction end-to-end integration script
  *
- * Runs the full sealed-bid reverse auction lifecycle on Arc Testnet:
+ * Runs the full sealed-bid reverse auction lifecycle on the active network:
  *   1. Buyer creates an auction and funds the budget.
  *   2. Bidder A and Bidder B commit sealed bids (with bonds).
  *   3. Both bidders reveal during the reveal window.
@@ -9,23 +9,26 @@
  *   5. The winner (provider) submits delivery.
  *   6. The buyer accepts, paying the winner.
  *
- * Each wallet's balance is printed before and after every stage.
- * Expected balances are computed from the script constants and printed alongside.
+ * Balance tables use the configured amounts throughout — no hardcoded values.
  *
  * Usage:
  *   BUYER_PRIVATE_KEY=0x...  BIDDER_A_PRIVATE_KEY=0x...  BIDDER_B_PRIVATE_KEY=0x...  \
  *     bun run contracts/test-integration/BlindRelayAuctionE2E.ts
  *
- * Requirements:
- *   - All three wallets funded with USDC on Arc Testnet.
- *     Buyer needs at least BUDGET (10 USDC). Each bidder needs at least BOND (1 USDC).
- *     Use "Get test USDC" in the Arc Studio sidebar.
- *   - No CIRCLE_API_KEY or CIRCLE_ENTITY_SECRET needed — plain private keys only.
+ * Optional env vars (all amounts in USDC with up to 6 decimal places):
+ *   BUDGET             — buyer's auction budget  (default: 2)
+ *   BOND               — bond per bidder         (default: 0.5)
+ *   PRICE_A            — bidder A's ask price    (default: 1.5)
+ *   PRICE_B            — bidder B's ask price    (default: 1.2)
+ *   COMMIT_DURATION    — commit window in seconds (default: 180)
+ *   REVEAL_DURATION    — reveal window in seconds (default: 180)
+ *   DELIVERY_DURATION  — delivery deadline in seconds (default: 300)
+ *   REVIEW_WINDOW      — review window in seconds (default: 60)
  *
- * Commit/reveal windows are intentionally short (60 s each) so the script completes quickly.
+ * Mainnet safety: pass --yes-mainnet to allow running against mainnet.
+ * The script pauses for 5 seconds before sending any transaction on mainnet.
  */
 
-import { createRequire } from "module";
 import {
   createPublicClient,
   createWalletClient,
@@ -33,57 +36,18 @@ import {
   parseUnits,
   formatUnits,
   getContract,
-  defineChain,
   encodeAbiParameters,
   keccak256,
   type Hash,
   type Address,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { CHAIN_CONFIG, BLIND_RELAY_AUCTION_ABI, TASK_ESCROW_ABI } from "../../src/lib/blindrelay.js";
 
-// ─── Load ABIs from committed files (works on Bun 1.x) ────────────────────────
+// ─── ABIs (re-exported from blindrelay.ts, which imports them as static JSON) ─
 
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const AUCTION_ABI: readonly any[] = require("../abi/BlindRelayAuction.json");
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ESCROW_ABI: readonly any[] = require("../abi/TaskEscrow.json");
-
-// ─── Chain ────────────────────────────────────────────────────────────────────
-
-const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.testnet.arc.io"] } },
-  blockExplorers: {
-    default: { name: "Arc Explorer", url: "https://explorer.testnet.arc.io" },
-  },
-});
-
-// ─── Addresses ────────────────────────────────────────────────────────────────
-
-const AUCTION_ADDRESS: Address = "0x27bcab80f486030dec9702d287e354a69bab186d";
-const ESCROW_ADDRESS:  Address = "0xe7c20bd2834814e160f7cef8fd2cfe8fc6a0f59d";
-const USDC_ADDRESS:    Address = "0x3600000000000000000000000000000000000000";
-
-// ─── Constants — edit these to change the run parameters ─────────────────────
-
-const BUDGET:            bigint = parseUnits("10", 6);   // 10 USDC buyer funds
-const BOND:              bigint = parseUnits("1",  6);   //  1 USDC bond per bidder
-const PRICE_A:           bigint = parseUnits("7",  6);   //  7 USDC bid from bidder A
-const PRICE_B:           bigint = parseUnits("6",  6);   //  6 USDC bid from bidder B (wins)
-const COMMIT_DURATION:   bigint = 60n;                   // 60-second commit window
-const REVEAL_DURATION:   bigint = 60n;                   // 60-second reveal window
-const DELIVERY_DURATION: bigint = 300n;                  // 5-minute delivery deadline
-const REVIEW_WINDOW:     bigint = 60n;                   // 60-second review window
-const TASK_HASH:         `0x${string}` =
-  keccak256(new TextEncoder().encode("e2e test task description"));
-
-// Derived expectations (before gas deductions)
-const WINNER_PRICE = PRICE_B < PRICE_A ? PRICE_B : PRICE_A;  // lower price wins
-const WINNER_IS_A  = PRICE_A < PRICE_B;                       // tie: A wins (committed first)
-const SURPLUS      = BUDGET - WINNER_PRICE;                   // buyer pending after finalize
+const AUCTION_ABI = BLIND_RELAY_AUCTION_ABI;
+const ESCROW_ABI  = TASK_ESCROW_ABI;
 
 // ─── Minimal USDC ABI ────────────────────────────────────────────────────────
 
@@ -106,8 +70,10 @@ const USDC_ABI = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const USDC_DECIMALS = 6;
+
 function fmt(amount: bigint): string {
-  return `${formatUnits(amount, 6)} USDC`;
+  return `${formatUnits(amount, USDC_DECIMALS)} USDC`;
 }
 
 function fmtDelta(n: bigint): string {
@@ -115,11 +81,11 @@ function fmtDelta(n: bigint): string {
 }
 
 function explorerTx(hash: Hash): string {
-  return `https://explorer.testnet.arc.io/tx/${hash}`;
+  return `${CHAIN_CONFIG.explorerBase}/tx/${hash}`;
 }
 
 function explorerAddr(addr: Address): string {
-  return `https://explorer.testnet.arc.io/address/${addr}`;
+  return `${CHAIN_CONFIG.explorerBase}/address/${addr}`;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -132,12 +98,17 @@ async function waitForTx(
   label: string,
 ): Promise<void> {
   process.stdout.write(`  ⏳  ${label}...`);
-  await pub.waitForTransactionReceipt({ hash });
+  const receipt = await pub.waitForTransactionReceipt({ hash });
+  if (receipt.status === "reverted") {
+    console.log(` ✗`);
+    console.log(`      tx (REVERTED): ${explorerTx(hash)}`);
+    throw new Error(`Transaction reverted: ${label}\n  tx: ${explorerTx(hash)}`);
+  }
   console.log(` ✓`);
   console.log(`      tx: ${explorerTx(hash)}`);
 }
 
-/** Build a sealed-bid commitment exactly as the contract does. */
+/** Build a sealed-bid commitment exactly as the Solidity contract does. */
 function makeCommitment(
   auctionAddress: Address,
   chainId: bigint,
@@ -161,51 +132,125 @@ function makeCommitment(
   );
 }
 
+/** Parse a USDC amount from an env var string, with a fallback default. */
+function envUsdc(varName: string, defaultVal: string): bigint {
+  const raw = process.env[varName] ?? defaultVal;
+  return parseUnits(raw, USDC_DECIMALS);
+}
+
+/** Parse a duration (seconds) from an env var string, with a fallback default. */
+function envDuration(varName: string, defaultVal: number): bigint {
+  const raw = process.env[varName];
+  const n = raw !== undefined ? parseInt(raw, 10) : defaultVal;
+  if (isNaN(n) || n <= 0) {
+    console.error(`Invalid ${varName}: must be a positive integer (seconds). Got: ${raw}`);
+    process.exit(1);
+  }
+  return BigInt(n);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // ── Mainnet guard ────────────────────────────────────────────────────────
+  const isMainnet = CHAIN_CONFIG.chainId !== 5042002;
+  const yesMainnet = process.argv.includes("--yes-mainnet");
+  if (isMainnet && !yesMainnet) {
+    console.error(
+      `\n⛔  ACTIVE_ENV is set to '${CHAIN_CONFIG.chainName}' (chain ${CHAIN_CONFIG.chainId}).\n` +
+      `    This script sends real transactions. To proceed, pass --yes-mainnet:\n\n` +
+      `      bun run contracts/test-integration/BlindRelayAuctionE2E.ts --yes-mainnet\n\n` +
+      `    Make sure all wallets are funded with real USDC on ${CHAIN_CONFIG.chainName}.\n`,
+    );
+    process.exit(1);
+  }
+
+  // ── Private keys ─────────────────────────────────────────────────────────
   const buyerKey   = process.env.BUYER_PRIVATE_KEY;
   const bidderAKey = process.env.BIDDER_A_PRIVATE_KEY;
   const bidderBKey = process.env.BIDDER_B_PRIVATE_KEY;
 
   if (!buyerKey || !bidderAKey || !bidderBKey) {
     console.error(
-      "\nUsage:\n" +
+      "\nMissing private keys. Set all three environment variables:\n\n" +
       "  BUYER_PRIVATE_KEY=0x...  BIDDER_A_PRIVATE_KEY=0x...  BIDDER_B_PRIVATE_KEY=0x...  \\\n" +
       "    bun run contracts/test-integration/BlindRelayAuctionE2E.ts\n\n" +
-      `Buyer needs ≥${fmt(BUDGET)} on Arc Testnet.\n` +
-      `Each bidder needs ≥${fmt(BOND)} on Arc Testnet.\n` +
-      "Use 'Get test USDC' in the Arc Studio sidebar.\n",
+      "Use 'Get test USDC' in the Arc Studio sidebar to fund testnet wallets.\n",
     );
     process.exit(1);
   }
 
+  // ── Run parameters from env vars ──────────────────────────────────────────
+  const BUDGET            = envUsdc("BUDGET",    "2");
+  const BOND              = envUsdc("BOND",      "0.5");
+  const PRICE_A           = envUsdc("PRICE_A",   "1.5");
+  const PRICE_B           = envUsdc("PRICE_B",   "1.2");
+  const COMMIT_DURATION   = envDuration("COMMIT_DURATION",   180);
+  const REVEAL_DURATION   = envDuration("REVEAL_DURATION",   180);
+  // Default: commit+reveal windows plus 30-minute buffer, so the task deadline
+  // is always well in the future at finalize time even if finalize is called
+  // several minutes after the reveal window closes.
+  const DELIVERY_DURATION = envDuration(
+    "DELIVERY_DURATION",
+    Number(COMMIT_DURATION) + Number(REVEAL_DURATION) + 1800,
+  );
+  const REVIEW_WINDOW     = envDuration("REVIEW_WINDOW",      60);
+
+  // Derived
+  const WINNER_PRICE = PRICE_B < PRICE_A ? PRICE_B : PRICE_A;
+  const WINNER_IS_A  = PRICE_A < PRICE_B;          // tie: A wins (committed first)
+  const SURPLUS      = BUDGET - WINNER_PRICE;
+
+  const TASK_HASH: `0x${string}` =
+    keccak256(new TextEncoder().encode("e2e test task description"));
+
+  // ── Addresses from CHAIN_CONFIG ───────────────────────────────────────────
+  const AUCTION_ADDRESS = CHAIN_CONFIG.blindRelayAuctionAddress;
+  const ESCROW_ADDRESS  = CHAIN_CONFIG.taskEscrowAddress;
+  const USDC_ADDRESS    = CHAIN_CONFIG.usdcAddress;
+
+  if (
+    AUCTION_ADDRESS === "0x0000000000000000000000000000000000000000" ||
+    ESCROW_ADDRESS  === "0x0000000000000000000000000000000000000000"
+  ) {
+    console.error(
+      `\n⛔  Contract addresses are not set for '${CHAIN_CONFIG.chainName}'.\n` +
+      `    Deploy first, then update src/lib/blindrelay.ts with the addresses.\n`,
+    );
+    process.exit(1);
+  }
+
+  // ── Viem clients ──────────────────────────────────────────────────────────
   const buyerAccount   = privateKeyToAccount(buyerKey   as `0x${string}`);
   const bidderAAccount = privateKeyToAccount(bidderAKey as `0x${string}`);
   const bidderBAccount = privateKeyToAccount(bidderBKey as `0x${string}`);
 
-  const transport = http("https://rpc.testnet.arc.io");
-  const pub = createPublicClient({ chain: arcTestnet, transport });
+  const transport = http(CHAIN_CONFIG.rpcUrl);
+  const pub = createPublicClient({ chain: CHAIN_CONFIG.viemChain, transport });
 
-  const buyerWallet   = createWalletClient({ account: buyerAccount,   chain: arcTestnet, transport });
-  const bidderAWallet = createWalletClient({ account: bidderAAccount, chain: arcTestnet, transport });
-  const bidderBWallet = createWalletClient({ account: bidderBAccount, chain: arcTestnet, transport });
+  const buyerWallet    = createWalletClient({ account: buyerAccount,   chain: CHAIN_CONFIG.viemChain, transport });
+  const bidderAWallet  = createWalletClient({ account: bidderAAccount, chain: CHAIN_CONFIG.viemChain, transport });
+  const bidderBWallet  = createWalletClient({ account: bidderBAccount, chain: CHAIN_CONFIG.viemChain, transport });
 
-  const chainId = BigInt(arcTestnet.id);
+  const chainId = BigInt(CHAIN_CONFIG.chainId);
 
-  // Contract handles
-  const auctionRead   = getContract({ address: AUCTION_ADDRESS, abi: AUCTION_ABI, client: pub });
-  const auctionBuyer  = getContract({ address: AUCTION_ADDRESS, abi: AUCTION_ABI, client: buyerWallet });
+  // ── Contract handles ──────────────────────────────────────────────────────
+  const auctionRead    = getContract({ address: AUCTION_ADDRESS, abi: AUCTION_ABI, client: pub });
+  const auctionBuyer   = getContract({ address: AUCTION_ADDRESS, abi: AUCTION_ABI, client: buyerWallet });
   const auctionBidderA = getContract({ address: AUCTION_ADDRESS, abi: AUCTION_ABI, client: bidderAWallet });
   const auctionBidderB = getContract({ address: AUCTION_ADDRESS, abi: AUCTION_ABI, client: bidderBWallet });
-
-  const escrowRead = getContract({ address: ESCROW_ADDRESS, abi: ESCROW_ABI, client: pub });
+  const escrowRead     = getContract({ address: ESCROW_ADDRESS,  abi: ESCROW_ABI,  client: pub });
 
   const usdcBuyer   = getContract({ address: USDC_ADDRESS, abi: USDC_ABI, client: buyerWallet });
   const usdcBidderA = getContract({ address: USDC_ADDRESS, abi: USDC_ABI, client: bidderAWallet });
   const usdcBidderB = getContract({ address: USDC_ADDRESS, abi: USDC_ABI, client: bidderBWallet });
 
-  // ── Balances ───────────────────────────────────────────────────────────────
+  const winnerWallet  = WINNER_IS_A ? bidderAWallet  : bidderBWallet;
+  const winnerAccount = WINNER_IS_A ? bidderAAccount : bidderBAccount;
+  const escrowWinner  = getContract({ address: ESCROW_ADDRESS, abi: ESCROW_ABI, client: winnerWallet });
+  const escrowBuyer   = getContract({ address: ESCROW_ADDRESS, abi: ESCROW_ABI, client: buyerWallet });
+
+  // ── Balance snapshots ─────────────────────────────────────────────────────
 
   type Snap = { buyer: bigint; bidderA: bigint; bidderB: bigint; auction: bigint; escrow: bigint };
 
@@ -249,11 +294,13 @@ async function main() {
     console.log(`    ${"Escrow".padEnd(10)} ${d(actual.escrow).padStart(18)}   ${fmtDelta(expEscrow).padStart(22)}`);
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  // ── Header ────────────────────────────────────────────────────────────────
 
   console.log(`\n${"═".repeat(70)}`);
-  console.log(`  BlindRelayAuction End-to-End Integration — Arc Testnet`);
+  console.log(`  BlindRelayAuction End-to-End Integration`);
   console.log(`${"═".repeat(70)}`);
+  console.log(`  Network  : ${CHAIN_CONFIG.chainName} (chain ${CHAIN_CONFIG.chainId})`);
+  console.log(`  RPC      : ${CHAIN_CONFIG.rpcUrl}`);
   console.log(`  Auction  : ${explorerAddr(AUCTION_ADDRESS)}`);
   console.log(`  Escrow   : ${explorerAddr(ESCROW_ADDRESS)}`);
   console.log(`  USDC     : ${USDC_ADDRESS}`);
@@ -263,7 +310,15 @@ async function main() {
   console.log(`  Budget   : ${fmt(BUDGET)}  |  Bond: ${fmt(BOND)}`);
   console.log(`  Windows  : commit ${COMMIT_DURATION}s / reveal ${REVEAL_DURATION}s`);
   console.log(`  Expected winner: Bidder ${WINNER_IS_A ? "A" : "B"} at ${fmt(WINNER_PRICE)}`);
-  console.log(`${"═".repeat(70)}\n`);
+  console.log(`${"═".repeat(70)}`);
+
+  if (isMainnet) {
+    console.log(`\n  ⚠️   MAINNET — pausing 5 seconds before sending any transaction.`);
+    console.log(`       Press Ctrl-C now to abort.\n`);
+    await sleep(5000);
+  } else {
+    console.log();
+  }
 
   const auctionCountInitial = await auctionRead.read.auctionCount() as bigint;
   const snap0 = await snapshot("initial");
@@ -288,11 +343,6 @@ async function main() {
     const hash = await usdcBidderB.write.approve([AUCTION_ADDRESS, BOND]);
     await waitForTx(pub, hash, `Bidder B approves auction for bond ${fmt(BOND)}`);
   }
-  // Winner will need to call TaskEscrow functions after finalize; approve escrow for WINNER_PRICE
-  const winnerWallet = WINNER_IS_A ? bidderAWallet : bidderBWallet;
-  const winnerAccount = WINNER_IS_A ? bidderAAccount : bidderBAccount;
-  const escrowWinner  = getContract({ address: ESCROW_ADDRESS, abi: ESCROW_ABI, client: winnerWallet });
-  const escrowBuyer   = getContract({ address: ESCROW_ADDRESS, abi: ESCROW_ABI, client: buyerWallet });
 
   const snap1 = await snapshot("after approvals");
   printDeltaAndExpected(snap0, snap1, 0n, 0n, 0n, 0n, 0n, "stage 1 (approvals, gas only)");
@@ -310,13 +360,7 @@ async function main() {
   let auctionId: bigint;
   {
     const hash = await auctionBuyer.write.createAuction([
-      BUDGET,
-      COMMIT_DURATION,
-      REVEAL_DURATION,
-      BOND,
-      DELIVERY_DURATION,
-      REVIEW_WINDOW,
-      TASK_HASH,
+      BUDGET, COMMIT_DURATION, REVEAL_DURATION, BOND, DELIVERY_DURATION, REVIEW_WINDOW, TASK_HASH,
     ]);
     await waitForTx(pub, hash, `createAuction (budget ${fmt(BUDGET)})`);
     auctionId = auctionCountInitial;
@@ -326,7 +370,6 @@ async function main() {
   }
 
   const snap2 = await snapshot("after createAuction");
-  // Expected: buyer -BUDGET (funded auction), auction +BUDGET
   printDeltaAndExpected(snap1, snap2, -BUDGET, 0n, 0n, BUDGET, 0n, "stage 2 (createAuction)");
 
   // ─── STAGE 3: Commit phase ─────────────────────────────────────────────────
@@ -353,10 +396,8 @@ async function main() {
   }
 
   const snap3 = await snapshot("after commits");
-  // Expected: each bidder -BOND (bond posted), auction +2×BOND
   printDeltaAndExpected(snap2, snap3, 0n, -BOND, -BOND, BOND * 2n, 0n, "stage 3 (commits)");
 
-  // Wait for commit window to close
   const nowAfterCommits = Math.floor(Date.now() / 1000);
   const waitForReveal = Math.max(0, Number(commitEnd) - nowAfterCommits + 2);
   console.log(`\n  Waiting ${waitForReveal}s for commit window to close...`);
@@ -379,15 +420,12 @@ async function main() {
   }
 
   const snap4 = await snapshot("after reveals");
-  // Reveals don't move tokens
   printDeltaAndExpected(snap3, snap4, 0n, 0n, 0n, 0n, 0n, "stage 4 (reveals, gas only)");
 
-  // Read current best bid from the contract
   const auctionView = await auctionRead.read.getAuction([auctionId]) as { bestPrice: bigint; bestBidder: Address };
   console.log(`\n  Current best bid: ${fmt(auctionView.bestPrice)} from ${auctionView.bestBidder}`);
   console.log(`  Expected winner : Bidder ${WINNER_IS_A ? "A" : "B"} (${winnerAccount.address})`);
 
-  // Wait for reveal window to close
   const nowAfterReveals = Math.floor(Date.now() / 1000);
   const waitForFinalize = Math.max(0, Number(revealEnd) - nowAfterReveals + 2);
   console.log(`\n  Waiting ${waitForFinalize}s for reveal window to close...`);
@@ -404,28 +442,30 @@ async function main() {
   let taskId: bigint;
 
   {
-    const hash = await auctionBuyer.write.finalize([auctionId]);
-    await waitForTx(pub, hash, `finalize auction ${auctionId}`);
-    taskId = taskCountBefore; // first task created by this finalize
+    // Finalize has a GAS_FLOOR guard (800_000). Pass an explicit gas limit
+    // (max(estimate×1.2, 900_000)) so the guard is always satisfied.
+    const gasEst = await pub.estimateContractGas({
+      address: AUCTION_ADDRESS, abi: AUCTION_ABI, functionName: "finalize",
+      args: [auctionId], account: buyerAccount,
+    });
+    const gasLimit = gasEst * 12n / 10n > 900_000n ? gasEst * 12n / 10n : 900_000n;
+    const hash = await auctionBuyer.write.finalize([auctionId], { gas: gasLimit });
+    await waitForTx(pub, hash, `finalize auction ${auctionId} (gas limit: ${gasLimit.toLocaleString()})`);
+    taskId = taskCountBefore;
     console.log(`  TaskEscrow task ID: ${taskId}`);
   }
 
   const snap5 = await snapshot("after finalize");
-  // Expected: auction contract pays WINNER_PRICE to escrow, keeps SURPLUS + 2×BOND pending
-  // Escrow receives WINNER_PRICE; auction net = -(WINNER_PRICE) from escrow flow
-  // Pending balances credited (not yet withdrawn): buyer +SURPLUS, winner +BOND, loser +BOND
-  // Actual auction token balance = initial budget + 2 bonds - winner price
   printDeltaAndExpected(
     snap4, snap5,
-    0n,                    // buyer: nothing moved yet (pending not withdrawn)
-    0n,                    // bidderA: nothing moved yet
-    0n,                    // bidderB: nothing moved yet
-    -(WINNER_PRICE),       // auction: paid winner price into escrow
-    WINNER_PRICE,          // escrow: received winner price
+    0n,               // buyer: pending not yet withdrawn
+    0n,               // bidderA: pending not yet withdrawn
+    0n,               // bidderB: pending not yet withdrawn
+    -(WINNER_PRICE),  // auction: paid winner price into escrow
+    WINNER_PRICE,     // escrow: received winner price
     "stage 5 (finalize)",
   );
 
-  // Read pending balances
   const pendingBuyer   = await auctionRead.read.pendingBalances([buyerAccount.address]) as bigint;
   const pendingBidderA = await auctionRead.read.pendingBalances([bidderAAccount.address]) as bigint;
   const pendingBidderB = await auctionRead.read.pendingBalances([bidderBAccount.address]) as bigint;
@@ -456,8 +496,8 @@ async function main() {
   const snap6 = await snapshot("after withdrawals");
   printDeltaAndExpected(
     snap5, snap6,
-    SURPLUS, BOND, BOND,   // buyer +surplus, each bidder +bond
-    -(SURPLUS + BOND * 2n), // auction paid out
+    SURPLUS, BOND, BOND,
+    -(SURPLUS + BOND * 2n),
     0n,
     "stage 6 (withdrawals)",
   );
@@ -495,11 +535,11 @@ async function main() {
   const snap8 = await snapshot("after accept");
   printDeltaAndExpected(
     snap6, snap8,
-    0n,                    // buyer: paid into escrow on createAuction — no change here
-    WINNER_IS_A ? WINNER_PRICE : 0n,   // bidderA gets payment if winner
-    WINNER_IS_A ? 0n : WINNER_PRICE,   // bidderB gets payment if winner
     0n,
-    -WINNER_PRICE,          // escrow paid out to winner
+    WINNER_IS_A ? WINNER_PRICE : 0n,
+    WINNER_IS_A ? 0n : WINNER_PRICE,
+    0n,
+    -WINNER_PRICE,
     "stages 7–8 (deliver + accept)",
   );
 
@@ -513,13 +553,6 @@ async function main() {
   const overallBidderB = snap8.bidderB - snap0.bidderB;
   const overallEscrow  = snap8.escrow  - snap0.escrow;
 
-  // Expected overall:
-  // Buyer: -BUDGET (created auction) + SURPLUS (withdrew) = -(WINNER_PRICE) net
-  // Bidder A (if winner): -BOND (commit) + BOND (withdrew) + WINNER_PRICE (accept) = +WINNER_PRICE
-  //         (if loser):   -BOND (commit) + BOND (withdrew)                          = 0
-  // Bidder B (if winner): same as A winner
-  //         (if loser):   same as A loser
-  // Escrow: 0 (task settled)
   const expOverallBuyer   = -WINNER_PRICE;
   const expOverallBidderA = WINNER_IS_A ? WINNER_PRICE : 0n;
   const expOverallBidderB = WINNER_IS_A ? 0n : WINNER_PRICE;
@@ -535,10 +568,10 @@ async function main() {
   console.log(`  ${"─".repeat(78)}`);
   const row = (label: string, bal: bigint, net: bigint, exp: bigint) =>
     console.log(`  ${label.padEnd(10)} ${fmt(bal).padStart(18)}   ${fmtDelta(net).padStart(22)}   ${fmtDelta(exp).padStart(22)}`);
-  row("Buyer",   snap8.buyer,   overallBuyer,   expOverallBuyer);
+  row("Buyer",    snap8.buyer,   overallBuyer,   expOverallBuyer);
   row("Bidder A", snap8.bidderA, overallBidderA, expOverallBidderA);
   row("Bidder B", snap8.bidderB, overallBidderB, expOverallBidderB);
-  row("Escrow",  snap8.escrow,  overallEscrow,  expOverallEscrow);
+  row("Escrow",   snap8.escrow,  overallEscrow,  expOverallEscrow);
   console.log();
   console.log(`  Gas note (Arc-specific — gas is USDC):`);
   console.log(`    Buyer signed   : approve + createAuction + finalize + withdraw + accept = 5 txns`);
@@ -548,7 +581,7 @@ async function main() {
   console.log(`${"═".repeat(70)}\n`);
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error("E2E script failed:", err);
   process.exit(1);
 });
