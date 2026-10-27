@@ -1,15 +1,19 @@
-import { useState } from 'react'
-import { useReadContract, useAccount } from 'wagmi'
+import { useState, useEffect } from 'react'
+import { useReadContract, useAccount, usePublicClient } from 'wagmi'
+import { parseAbiItem } from 'viem'
 import {
   CHAIN_CONFIG,
   BLIND_RELAY_AUCTION_ABI,
+  parseAuction,
+  parseBid,
+  type AuctionRecord,
   formatUsdc,
   formatAddress,
   derivePhase,
   formatCountdown,
 } from '../lib/blindrelay'
 import { useNow } from '../lib/useNow'
-import { consumePendingHashAuctionId } from '../App'
+import { consumePendingHashAuctionId, setPendingTaskId } from '../App'
 import {
   Card,
   PageWrapper,
@@ -25,24 +29,6 @@ import {
 import { ExternalLink, RefreshCw } from 'lucide-react'
 
 const ARC = CHAIN_CONFIG
-
-// ─── Types ─────────────────────────────────────────────────────────────────
-
-interface AuctionRecord {
-  buyer: string
-  budget: bigint
-  bondAmount: bigint
-  bestPrice: bigint
-  bestBidder: string
-  commitEnd: bigint
-  revealEnd: bigint
-  deliveryDuration: bigint
-  reviewWindow: bigint
-  taskHash: string
-  status: number
-  commitCounter: number
-  bidderCount: bigint
-}
 
 // ─── RecentAuctions ─────────────────────────────────────────────────────────
 // Reads the latest ≤20 auction IDs via auctionCount(), then fetches each via
@@ -74,7 +60,10 @@ function RecentAuctionRow({
     args: [auctionId],
     chainId: ARC.chainId,
   })
-  const a = data as AuctionRecord | undefined
+  const a: AuctionRecord | null = (() => {
+    if (data === undefined) return null
+    try { return parseAuction(data) } catch { return null }
+  })()
   const phase = a ? derivePhase(a.status, a.commitEnd, a.revealEnd, now) : null
   const countdownTarget = a && phase
     ? phase === 'Commit' ? Number(a.commitEnd)
@@ -217,8 +206,9 @@ function BidderRow({
     chainId: ARC.chainId,
   })
 
-  const hasRevealed = data ? (data as readonly [unknown, unknown, unknown, boolean])[3] : false
-  const isWinner = bidder.toLowerCase() === bestBidder.toLowerCase() && status === 1
+  const bid = (() => { try { return data !== undefined ? parseBid(data) : null } catch { return null } })()
+  const hasRevealed = bid?.hasRevealed ?? false
+  const isWinner = !!bestBidder && bidder.toLowerCase() === bestBidder.toLowerCase() && status === 1
 
   return (
     <div className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
@@ -249,9 +239,10 @@ function BidderRow({
 
 // ─── AuctionView (main) ──────────────────────────────────────────────────────
 
-export default function AuctionView() {
+export default function AuctionView({ onNavigate }: { onNavigate?: (page: 'task') => void }) {
   const { address } = useAccount()
   const now = useNow()
+  const publicClient = usePublicClient()
 
   // Consume any auction ID that was set via a hash link (#auction=N).
   // Read once at mount time — consumePendingHashAuctionId clears the value after reading.
@@ -262,6 +253,9 @@ export default function AuctionView() {
     const n = parseInt(_initialId, 10)
     return isNaN(n) ? null : BigInt(n)
   })
+
+  // Task ID created by finalize — read from AuctionFinalized event log.
+  const [finalizedTaskId, setFinalizedTaskId] = useState<bigint | null>(null)
 
   const { data: auction, isLoading, isError } = useReadContract({
     address: ARC.blindRelayAuctionAddress,
@@ -281,7 +275,10 @@ export default function AuctionView() {
     query: { enabled: auctionId !== null },
   })
 
-  const a = auction as AuctionRecord | undefined
+  const a: AuctionRecord | null = (() => {
+    if (auction === undefined) return null
+    try { return parseAuction(auction) } catch { return null }
+  })()
   const phase = a ? derivePhase(a.status, a.commitEnd, a.revealEnd, now) : null
 
   const countdownTarget = a
@@ -290,7 +287,40 @@ export default function AuctionView() {
     : null
     : null
 
-  const isMyAuction = a && address && a.buyer.toLowerCase() === address.toLowerCase()
+  const isMyAuction = !!a && !!address && a.buyer.toLowerCase() === address.toLowerCase()
+
+  // When the auction is finalized, fetch the task ID from the AuctionFinalized event.
+  // Uses a bounded block range (last 500 000 blocks ≈ 70 days at 0.5s/block) to stay
+  // within the Arc RPC's getLogs range limit.  Only the async .then() calls setState.
+  useEffect(() => {
+    if (!publicClient || !auctionId || !a || a.status !== 1) return
+    let cancelled = false
+    void publicClient.getBlockNumber().then((latest) => {
+      if (cancelled) return
+      const FROM_BLOCKS_AGO = 500_000n
+      const fromBlock = latest > FROM_BLOCKS_AGO ? latest - FROM_BLOCKS_AGO : 0n
+      return publicClient.getLogs({
+        address: ARC.blindRelayAuctionAddress,
+        event: parseAbiItem(
+          'event AuctionFinalized(uint256 indexed auctionId, address indexed winner, uint256 price, uint256 taskId)',
+        ),
+        args: { auctionId },
+        fromBlock,
+        toBlock: 'latest',
+      })
+    }).then((logs) => {
+      if (cancelled || !logs || logs.length === 0) return
+      const taskId = (logs[0].args as { taskId?: bigint }).taskId
+      if (taskId !== undefined) setFinalizedTaskId(taskId)
+    }).catch(() => { /* ignore — task ID display is optional */ })
+    return () => { cancelled = true }
+  }, [publicClient, auctionId, a?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleViewTask() {
+    if (finalizedTaskId === null) return
+    setPendingTaskId(finalizedTaskId.toString())
+    onNavigate?.('task')
+  }
 
   function handleLookup() {
     const n = parseInt(idInput.trim(), 10)
@@ -310,6 +340,33 @@ export default function AuctionView() {
   return (
     <PageWrapper>
       <PageTitle>Auction View</PageTitle>
+
+      {/* How it works — plain language explainer */}
+      <div className="rounded-2xl bg-blue-50/60 border border-blue-100 px-5 py-4 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">How it works</p>
+        <ul className="space-y-1.5 text-sm text-slate-600">
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">1.</span>
+            <span>The buyer locks the full budget into the contract when creating the auction.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">2.</span>
+            <span>Each bidder posts a sealed commitment (hash of their price + a secret salt) and pays the bond — the bond prevents spam.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">3.</span>
+            <span>In the reveal phase bidders publish their price and salt. Bidders who <em>do not</em> reveal forfeit their bond to the buyer.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">4.</span>
+            <span>The lowest revealed price wins. Finalize creates an escrow task paying exactly that price to the winner.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">5.</span>
+            <span>After finalize, use <strong>Withdraw</strong> to claim: the buyer gets back the leftover budget (budget minus winning price), all revealing bidders get their bonds back.</span>
+          </li>
+        </ul>
+      </div>
 
       {/* Look-up card */}
       <Card className="p-5 space-y-3">
@@ -384,20 +441,40 @@ export default function AuctionView() {
             </div>
           </Card>
 
-          {/* Winner */}
+          {/* Finalized result card */}
           {a.status === 1 && a.bestBidder !== '0x0000000000000000000000000000000000000000' && (
-            <Card className="p-5 space-y-3">
-              <p className="text-sm font-semibold text-green-700">Auction finalized</p>
-              <Row label="Winner" value={
-                <a
-                  href={`${ARC.explorerBase}/address/${a.bestBidder}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="font-mono text-blue-600 hover:underline flex items-center gap-1 justify-end"
+            <Card className="p-5 space-y-3 border-green-200 bg-green-50/40">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                <p className="text-sm font-semibold text-green-800">Auction finalized</p>
+              </div>
+              <div className="space-y-0.5">
+                <Row label="Winner" value={
+                  <a
+                    href={`${ARC.explorerBase}/address/${a.bestBidder}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="font-mono text-blue-600 hover:underline flex items-center gap-1 justify-end"
+                  >
+                    {formatAddress(a.bestBidder)} <ExternalLink size={11} />
+                  </a>
+                } />
+                <Row label="Winning price" value={`${formatUsdc(a.bestPrice)} USDC`} />
+                {finalizedTaskId !== null && (
+                  <Row label="Escrow task" value={
+                    <span className="font-mono font-bold text-slate-800">#{finalizedTaskId.toString()}</span>
+                  } />
+                )}
+              </div>
+              {finalizedTaskId !== null && onNavigate && (
+                <button
+                  onClick={handleViewTask}
+                  className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-2.5
+                    rounded-xl bg-green-700 hover:bg-green-800 text-white text-sm font-semibold
+                    transition-colors cursor-pointer"
                 >
-                  {formatAddress(a.bestBidder)} <ExternalLink size={11} />
-                </a>
-              } />
-              <Row label="Winning price" value={`${formatUsdc(a.bestPrice)} USDC`} />
+                  Open Task #{finalizedTaskId.toString()} →
+                </button>
+              )}
             </Card>
           )}
 

@@ -196,12 +196,24 @@ export default function RevealBid() {
           </div>
         )}
 
-        {/* Commitment preview */}
+        {/* Commitment preview — shows the committed price when all inputs are ready */}
         {commitment && (
           <div className="bg-slate-50 rounded-xl p-3 space-y-1">
-            <Row label="Price to reveal" value={`${formatUsdc(priceRaw)} USDC`} />
+            <Row
+              label="Committed price"
+              value={
+                <span className="font-semibold text-slate-900">
+                  {formatUsdc(priceRaw)} USDC
+                  {saltSource !== 'manual' && (
+                    <span className="ml-1.5 text-xs font-normal text-green-600">
+                      ({saltSource === 'auto' ? 'loaded from browser' : 'loaded from file'})
+                    </span>
+                  )}
+                </span>
+              }
+            />
             <div>
-              <p className="text-xs text-slate-400">Computed commitment</p>
+              <p className="text-xs text-slate-400">Computed commitment (must match on-chain)</p>
               <p className="font-mono text-xs break-all text-slate-700">{commitment}</p>
             </div>
           </div>

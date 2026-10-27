@@ -203,6 +203,162 @@ export function computeCommitment(
   return keccak256(encoded)
 }
 
+// ─── On-chain result parsers ───────────────────────────────────────────────
+//
+// viem returns structs as named objects when the ABI has named outputs AND the
+// ABI is typed `as const`.  We widen to `Abi` for runtime flexibility, so the
+// compiler can't prove the names — call these helpers instead of casting raw
+// results directly.  Each one accepts `unknown` and returns a typed object,
+// throwing a clear message if the shape is wrong.
+
+export interface Task {
+  buyer:        `0x${string}`
+  provider:     `0x${string}`
+  price:        bigint
+  deadline:     bigint
+  reviewWindow: bigint
+  deliveredAt:  bigint
+  status:       number
+  deliveryHash: `0x${string}`
+}
+
+export interface AuctionRecord {
+  buyer:            `0x${string}`
+  budget:           bigint
+  bondAmount:       bigint
+  bestPrice:        bigint
+  bestBidder:       `0x${string}`
+  commitEnd:        bigint
+  revealEnd:        bigint
+  deliveryDuration: bigint
+  reviewWindow:     bigint
+  taskHash:         `0x${string}`
+  status:           number
+  commitCounter:    number
+  bidderCount:      bigint
+}
+
+export interface BidRecord {
+  commitOrder: number
+  hasRevealed: boolean
+  commitment:  `0x${string}`
+}
+
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000'
+
+/**
+ * Maps the raw result from `tasks(id)` to a typed Task object.
+ * Accepts both a positional tuple (viem with widened Abi) and a named struct
+ * (viem with const Abi).  Throws a descriptive error on unexpected shapes.
+ */
+export function parseTask(raw: unknown): Task {
+  if (raw === null || raw === undefined) throw new Error('parseTask: result is null/undefined')
+  // Named object (const Abi path)
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const r = raw as Record<string, unknown>
+    return {
+      buyer:        (r['buyer']        as `0x${string}`) ?? ZERO_ADDR,
+      provider:     (r['provider']     as `0x${string}`) ?? ZERO_ADDR,
+      price:        (r['price']        as bigint) ?? 0n,
+      deadline:     (r['deadline']     as bigint) ?? 0n,
+      reviewWindow: (r['reviewWindow'] as bigint) ?? 0n,
+      deliveredAt:  (r['deliveredAt']  as bigint) ?? 0n,
+      status:       Number(r['status'] ?? 0),
+      deliveryHash: (r['deliveryHash'] as `0x${string}`) ?? ('0x' + '00'.repeat(32) as `0x${string}`),
+    }
+  }
+  // Positional tuple (widened Abi path): [buyer, provider, price, deadline, reviewWindow, deliveredAt, status, deliveryHash]
+  if (Array.isArray(raw) && raw.length >= 8) {
+    return {
+      buyer:        (raw[0] as `0x${string}`) ?? ZERO_ADDR,
+      provider:     (raw[1] as `0x${string}`) ?? ZERO_ADDR,
+      price:        (raw[2] as bigint) ?? 0n,
+      deadline:     (raw[3] as bigint) ?? 0n,
+      reviewWindow: (raw[4] as bigint) ?? 0n,
+      deliveredAt:  (raw[5] as bigint) ?? 0n,
+      status:       Number(raw[6] ?? 0),
+      deliveryHash: (raw[7] as `0x${string}`) ?? ('0x' + '00'.repeat(32) as `0x${string}`),
+    }
+  }
+  throw new Error(`parseTask: unexpected shape — ${JSON.stringify(raw).slice(0, 120)}`)
+}
+
+/**
+ * Maps the raw result from `getAuction(id)` to a typed AuctionRecord.
+ * Handles both named-object and positional-tuple results.
+ * Field order matches the Solidity struct declaration:
+ *   buyer, budget, bondAmount, bestPrice, bestBidder, commitEnd, revealEnd,
+ *   deliveryDuration, reviewWindow, taskHash, status, commitCounter, bidderCount
+ */
+export function parseAuction(raw: unknown): AuctionRecord {
+  if (raw === null || raw === undefined) throw new Error('parseAuction: result is null/undefined')
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const r = raw as Record<string, unknown>
+    return {
+      buyer:            (r['buyer']            as `0x${string}`) ?? ZERO_ADDR,
+      budget:           (r['budget']           as bigint) ?? 0n,
+      bondAmount:       (r['bondAmount']       as bigint) ?? 0n,
+      bestPrice:        (r['bestPrice']        as bigint) ?? 0n,
+      bestBidder:       (r['bestBidder']       as `0x${string}`) ?? ZERO_ADDR,
+      commitEnd:        (r['commitEnd']        as bigint) ?? 0n,
+      revealEnd:        (r['revealEnd']        as bigint) ?? 0n,
+      deliveryDuration: (r['deliveryDuration'] as bigint) ?? 0n,
+      reviewWindow:     (r['reviewWindow']     as bigint) ?? 0n,
+      taskHash:         (r['taskHash']         as `0x${string}`) ?? ('0x' + '00'.repeat(32) as `0x${string}`),
+      status:           Number(r['status']     ?? 0),
+      commitCounter:    Number(r['commitCounter'] ?? 0),
+      bidderCount:      (r['bidderCount']      as bigint) ?? 0n,
+    }
+  }
+  if (Array.isArray(raw) && raw.length >= 13) {
+    return {
+      buyer:            (raw[0]  as `0x${string}`) ?? ZERO_ADDR,
+      budget:           (raw[1]  as bigint) ?? 0n,
+      bondAmount:       (raw[2]  as bigint) ?? 0n,
+      bestPrice:        (raw[3]  as bigint) ?? 0n,
+      bestBidder:       (raw[4]  as `0x${string}`) ?? ZERO_ADDR,
+      commitEnd:        (raw[5]  as bigint) ?? 0n,
+      revealEnd:        (raw[6]  as bigint) ?? 0n,
+      deliveryDuration: (raw[7]  as bigint) ?? 0n,
+      reviewWindow:     (raw[8]  as bigint) ?? 0n,
+      taskHash:         (raw[9]  as `0x${string}`) ?? ('0x' + '00'.repeat(32) as `0x${string}`),
+      status:           Number(raw[10] ?? 0),
+      commitCounter:    Number(raw[11] ?? 0),
+      bidderCount:      (raw[12] as bigint) ?? 0n,
+    }
+  }
+  throw new Error(`parseAuction: unexpected shape — ${JSON.stringify(raw).slice(0, 120)}`)
+}
+
+/**
+ * Maps the raw result from `getBid(auctionId, bidder)` to a typed BidRecord.
+ * Solidity return order: (uint32 commitOrder, bool hasRevealed, bytes32 commitment)
+ */
+export function parseBid(raw: unknown): BidRecord {
+  if (raw === null || raw === undefined) throw new Error('parseBid: result is null/undefined')
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const r = raw as Record<string, unknown>
+    return {
+      commitOrder: Number(r['commitOrder'] ?? 0),
+      hasRevealed: Boolean(r['hasRevealed']),
+      commitment:  (r['commitment'] as `0x${string}`) ?? ('0x' + '00'.repeat(32) as `0x${string}`),
+    }
+  }
+  if (Array.isArray(raw) && raw.length >= 3) {
+    return {
+      commitOrder: Number(raw[0] ?? 0),
+      hasRevealed: Boolean(raw[1]),
+      commitment:  (raw[2] as `0x${string}`) ?? ('0x' + '00'.repeat(32) as `0x${string}`),
+    }
+  }
+  throw new Error(`parseBid: unexpected shape — ${JSON.stringify(raw).slice(0, 120)}`)
+}
+
+/** Returns true if address is the zero address or missing. */
+export function isZeroAddress(addr: string | null | undefined): boolean {
+  return !addr || addr === ZERO_ADDR
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 export function formatUsdc(raw: bigint): string {

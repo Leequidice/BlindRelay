@@ -6,6 +6,7 @@ import {
   CHAIN_CONFIG,
   BLIND_RELAY_AUCTION_ABI,
   ERC20_APPROVE_ABI,
+  parseAuction,
   computeCommitment,
   parseUsdc,
   formatUsdc,
@@ -38,6 +39,9 @@ export default function CommitBid() {
   const [saltAcknowledged, setSaltAcknowledged] = useState(false)
   const [approveRevert, setApproveRevert] = useState<{ message: string; txUrl: string } | null>(null)
   const [commitRevert, setCommitRevert]   = useState<{ message: string; txUrl: string } | null>(null)
+  // Confirmation gate: true when the user has clicked "Commit bid" and seen the
+  // summary dialog but not yet clicked the final "Yes, commit" button.
+  const [confirmPending, setConfirmPending] = useState(false)
 
   const auctionId = (() => { try { const n = parseInt(auctionIdStr, 10); return isNaN(n) ? null : BigInt(n) } catch { return null } })()
   const priceRaw = (() => { try { return parseUsdc(priceStr) } catch { return 0n } })()
@@ -52,8 +56,10 @@ export default function CommitBid() {
     query: { enabled: auctionId !== null },
   })
 
-  type AuctionView = { bondAmount: bigint; budget: bigint; status: number; buyer: string }
-  const auction = auctionData as AuctionView | undefined
+  const auction = (() => {
+    if (auctionData === undefined) return null
+    try { return parseAuction(auctionData) } catch { return null }
+  })()
   const bondRaw = auction?.bondAmount ?? 0n
 
   // Compute commitment
@@ -150,8 +156,16 @@ export default function CommitBid() {
     )
   }
 
-  function handleCommit() {
+  /** First click: show the confirmation dialog. */
+  function handleCommitRequest() {
     if (!commitment) return
+    setConfirmPending(true)
+  }
+
+  /** Second click: actually send the transaction. */
+  function handleCommitConfirm() {
+    if (!commitment) return
+    setConfirmPending(false)
     setCommitRevert(null)
     commit(
       {
@@ -166,6 +180,10 @@ export default function CommitBid() {
         onError: (e) => { const m = decodeRevertError(e) || parseOnchainError(e); if (m) toast.error(m) },
       },
     )
+  }
+
+  function handleCommitCancel() {
+    setConfirmPending(false)
   }
 
   const step = commitConfirmed ? 3 : approveConfirmed ? 2 : approveHash ? 1 : 0
@@ -309,6 +327,36 @@ export default function CommitBid() {
         )}
       </Card>
 
+      {/* Confirmation dialog — shown between clicking "Commit bid" and final confirmation */}
+      {confirmPending && address && auctionId !== null && priceRaw > 0n && (
+        <Card className="p-5 space-y-4 border-2 border-amber-300 bg-amber-50/60">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Confirm your commitment</p>
+              <p className="text-xs text-amber-700 mt-1">
+                This cannot be changed after committing. If you lose your salt, your bond will be
+                forfeited to the buyer.
+              </p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-3 space-y-1 border border-amber-200">
+            <Row label="Auction"    value={`#${auctionId.toString()}`} />
+            <Row label="Bid price"  value={`${formatUsdc(priceRaw)} USDC`} />
+            <Row label="Bond"       value={`${formatUsdc(bondRaw)} USDC`} />
+            <Row label="Your wallet" value={<span className="font-mono text-xs">{formatAddress(address)}</span>} />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={handleCommitCancel} fullWidth>
+              Cancel
+            </Button>
+            <Button onClick={handleCommitConfirm} fullWidth>
+              Yes, commit this bid
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Step 2: commit */}
       <Card className="p-5 space-y-3">
         <div className="flex items-center gap-2">
@@ -317,7 +365,7 @@ export default function CommitBid() {
           {commitHash && <span className="ml-auto text-xs"><TxLink hash={commitHash} /></span>}
         </div>
         <div className="pl-8">
-          <Button onClick={handleCommit} disabled={!canCommit} fullWidth>
+          <Button onClick={handleCommitRequest} disabled={!canCommit} fullWidth>
             {commitP || commitConfirming ? (
               <><Spinner /> {commitP ? 'Confirm in wallet…' : 'Confirming…'}</>
             ) : commitDropped ? (

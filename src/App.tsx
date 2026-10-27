@@ -70,6 +70,24 @@ export function consumePendingHashAuctionId(): string | null {
   return val
 }
 
+/**
+ * Task ID to pre-load in TaskView when the user clicks "View Task" from
+ * a finalized auction. Cleared after first read.
+ */
+let _pendingTaskId: string | null = null
+
+/** Set the task ID to open when navigating to the Task tab. */
+export function setPendingTaskId(id: string): void {
+  _pendingTaskId = id
+}
+
+/** Read and clear the pending task ID (one-shot). */
+export function consumePendingTaskId(): string | null {
+  const val = _pendingTaskId
+  _pendingTaskId = null
+  return val
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>(() => {
     const parsed = parseHash()
@@ -183,16 +201,18 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main content */}
+      {/* Main content — each page has its own ErrorBoundary so one tab's crash
+          doesn't take down the others. The outer ErrorBoundary catches anything
+          that escapes (e.g. a crash in the nav itself). */}
       <main className="pb-20">
         <div className={wrongChain ? 'pointer-events-none opacity-60 select-none' : ''}>
           <ErrorBoundary>
-            {page === 'create'   && <CreateAuction />}
-            {page === 'view'     && <AuctionView />}
-            {page === 'commit'   && <CommitBid />}
-            {page === 'reveal'   && <RevealBid />}
-            {page === 'finalize' && <FinalizeWithdraw />}
-            {page === 'task'     && <TaskView />}
+            {page === 'create'   && <ErrorBoundary><CreateAuction /></ErrorBoundary>}
+            {page === 'view'     && <ErrorBoundary><AuctionView onNavigate={navigate} /></ErrorBoundary>}
+            {page === 'commit'   && <ErrorBoundary><CommitBid /></ErrorBoundary>}
+            {page === 'reveal'   && <ErrorBoundary><RevealBid /></ErrorBoundary>}
+            {page === 'finalize' && <ErrorBoundary><FinalizeWithdraw /></ErrorBoundary>}
+            {page === 'task'     && <ErrorBoundary><TaskView /></ErrorBoundary>}
           </ErrorBoundary>
         </div>
       </main>

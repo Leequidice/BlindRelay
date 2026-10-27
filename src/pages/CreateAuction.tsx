@@ -252,10 +252,25 @@ export default function CreateAuction() {
   return (
     <PageWrapper>
       <PageTitle>Create Auction</PageTitle>
-      <p className="text-sm text-slate-500">
-        Post a task as a sealed-bid reverse auction. Bidders compete on price; the lowest price wins
-        and a TaskEscrow task is created automatically.
-      </p>
+
+      {/* Plain-language explainer */}
+      <div className="rounded-2xl bg-blue-50/60 border border-blue-100 px-5 py-4 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Before you start</p>
+        <ul className="space-y-1.5 text-sm text-slate-600">
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">Budget</span>
+            <span>The full budget is locked into the contract the moment you create the auction. It is not charged to bidders.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">Bond</span>
+            <span>Each bidder pays this as a deposit when submitting their sealed bid. Bonds are returned after the reveal — but only to bidders who reveal. A bidder who never reveals forfeits their bond to you.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-400 font-bold shrink-0">Winner</span>
+            <span>The lowest revealed bid wins and is paid exactly their own price from your budget. The leftover (budget minus winning price) is yours to withdraw after finalize.</span>
+          </li>
+        </ul>
+      </div>
 
       <Card className="p-6 space-y-5">
         {/* Task description */}
