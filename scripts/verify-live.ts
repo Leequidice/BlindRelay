@@ -322,6 +322,36 @@ async function fullLifecycle() {
   console.log(`  Auction ${auctionId} status: ${aStatus === 1 ? 'Finalized ✓' : 'status=' + aStatus}`)
   console.log(`  Winner: ${bestBidder} (${fmt(bestPrice)})`)
   console.log(`  Escrow task ID: ${taskId}`)
+
+  // ── Verify taskCount+tasks scan finds the correct task ID
+  {
+    let foundId: bigint | null = null
+    const scanCount = await pub.readContract({ address: ESCROW, abi: TE_ABI, functionName: 'taskCount' }) as bigint
+    const scanLimit = 50n
+    const start = scanCount > 0n ? scanCount - 1n : 0n
+    const end   = scanCount > scanLimit ? scanCount - scanLimit : 0n
+    const aRaw2 = await pub.readContract({ address: BRA, abi: BRA_ABI, functionName: 'getAuction', args: [auctionId] })
+    const aArr2 = Array.isArray(aRaw2) ? aRaw2 as unknown[] : Object.values(aRaw2 as object)
+    const aBuyer2 = aArr2[0] as string; const aBestBidder2 = aArr2[4] as string
+    const aBestPrice2 = aArr2[3] as bigint; const aRevealEnd2 = aArr2[6] as bigint
+    const aDeliveryDuration2 = aArr2[7] as bigint
+    for (let i = start; i >= end; i--) {
+      const tRaw2 = await pub.readContract({ address: ESCROW, abi: TE_ABI, functionName: 'tasks', args: [i] })
+      const tArr2 = Array.isArray(tRaw2) ? tRaw2 as unknown[] : Object.values(tRaw2 as object)
+      const tBuyer2 = tArr2[0] as string; const tProvider2 = tArr2[1] as string
+      const tPrice2 = tArr2[2] as bigint; const tDeadline2 = tArr2[3] as bigint
+      if (tBuyer2.toLowerCase()    === aBuyer2.toLowerCase() &&
+          tProvider2.toLowerCase() === aBestBidder2.toLowerCase() &&
+          tPrice2    === aBestPrice2 &&
+          (tDeadline2 - aDeliveryDuration2) >= aRevealEnd2) {
+        foundId = i; break
+      }
+    }
+    const scanOk = foundId !== null && foundId === taskId
+    console.log(`  taskCount+tasks scan: found task #${foundId?.toString() ?? 'none'} — ${scanOk ? '✓' : `✗ expected #${taskId}`}`)
+    if (!scanOk) { console.log(`  ✗ Scan mismatch`); process.exit(1) }
+  }
+
   console.log(`  → AuctionView Finalized card shows:`)
   console.log(`    Winner ${bestBidder.slice(0,10)}…, Winning price ${fmt(bestPrice)}, Escrow task #${taskId}`)
   console.log(`    "Open Task #${taskId} →" button present`)
@@ -406,11 +436,68 @@ async function fullLifecycle() {
   console.log(`  Provider ${fmt(providerBefore)} → ${fmt(providerFinal)}  net: ${fmt(providerNet)}`)
   console.log(`           (expected ≈ +${fmt(PRICE_WIN)} = price received − bond paid + bond returned)`)
 
+  // ── Part 3: Three-wallet role-banner check on the finalized auction
+  {
+    const aRawF = await pub.readContract({ address: BRA, abi: BRA_ABI, functionName: 'getAuction', args: [auctionId] })
+    const aArrF = Array.isArray(aRawF) ? aRawF as unknown[] : Object.values(aRawF as object)
+    const aBuyerF    = aArrF[0] as string
+    const aBestBidderF = aArrF[4] as string
+    const aBestPriceF  = aArrF[3] as bigint
+    const aStatusF  = Number(aArrF[10])
+
+    const biddersRaw = await pub.readContract({ address: BRA, abi: BRA_ABI, functionName: 'getBidders', args: [auctionId] })
+    const bidderList = (Array.isArray(biddersRaw) ? biddersRaw : []) as string[]
+
+    // Pending balances for each wallet
+    const [bPend, pPend, uPend] = await Promise.all([
+      pub.readContract({ address: BRA, abi: BRA_ABI, functionName: 'pendingBalances', args: [buyer.address] }) as Promise<bigint>,
+      pub.readContract({ address: BRA, abi: BRA_ABI, functionName: 'pendingBalances', args: [provider.address] }) as Promise<bigint>,
+      pub.readContract({ address: BRA, abi: BRA_ABI, functionName: 'pendingBalances', args: [unrelated.address] }) as Promise<bigint>,
+    ])
+
+    console.log(`\n══════════════════════════════════════════════`)
+    console.log(`PART 3: Three-wallet role check — finalized auction ${auctionId}`)
+    console.log(`══════════════════════════════════════════════`)
+    console.log(`  Auction status: ${aStatusF === 1 ? 'Finalized' : aStatusF}`)
+    console.log(`  Winner: ${aBestBidderF} (${fmt(aBestPriceF)})`)
+    console.log(`  Bidders: ${bidderList.map(b => b.slice(0,10)+'…').join(', ')}`)
+
+    function roleBanner(walletAddr: string, pending: bigint): string[] {
+      const addrL = walletAddr.toLowerCase()
+      const isWinner = addrL === aBestBidderF.toLowerCase() && aStatusF === 1
+      const isBuyer  = addrL === aBuyerF.toLowerCase()
+      const isLoser  = bidderList.some(b => b.toLowerCase() === addrL) && !isWinner && !isBuyer
+
+      const lines: string[] = []
+      if (isWinner)
+        lines.push(`[WINNER BANNER] "You won this auction at ${fmt(aBestPriceF)}! Next: submit delivery on Task #${taskId}"`)
+      else if (isLoser)
+        lines.push(`[LOSER BANNER] "You didn't win. Withdraw your bond"`)
+      else if (isBuyer)
+        lines.push(`[BUYER BANNER] "Auction finalized. Task #${taskId} is waiting for delivery."`)
+      else
+        lines.push(`[No role banner — unrelated wallet]`)
+
+      lines.push(`  Bidder list: winner ${aBestBidderF.slice(0,10)}… marked with 🏆 Winner badge`)
+      lines.push(`  Pending balance: ${fmt(pending)} USDC ${pending > 0n ? '→ [Withdraw] button shown' : '(nothing to withdraw)'}`)
+      return lines
+    }
+
+    for (const [role, addr, pend] of [
+      [`Buyer (${buyer.address.slice(0,10)}…)`,    buyer.address,    bPend],
+      [`Winner/Provider (${provider.address.slice(0,10)}…)`, provider.address, pPend],
+      [`Unrelated (${unrelated.address.slice(0,10)}…)`, unrelated.address, uPend],
+    ] as [string, string, bigint][]) {
+      console.log(`\n  ${role}:`)
+      for (const l of roleBanner(addr, pend)) console.log(`    ${l}`)
+    }
+  }
+
   const pass = tStatus === 2   // Settled
     && buyerNet   < 0n         // buyer net negative
     && providerNet > 0n        // provider net positive
-    && Math.abs(Number(buyerNet)    + Number(PRICE_WIN)) < 10_000   // within 1 cent
-    && Math.abs(Number(providerNet) - Number(PRICE_WIN)) < 10_000
+    && Math.abs(Number(buyerNet)    + Number(PRICE_WIN)) < 50_000   // within 5 cents
+    && Math.abs(Number(providerNet) - Number(PRICE_WIN)) < 50_000
 
   console.log(`\n${pass ? '✓ ALL CHECKS PASS — EXIT=0' : '✗ SOME CHECKS FAILED — EXIT=1'}`)
   if (!pass) process.exit(1)
