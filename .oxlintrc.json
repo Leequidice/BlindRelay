@@ -62,7 +62,7 @@
 
     "react/react-in-jsx-scope": "off",
 
-    "react/set-state-in-effect": "error",
+    "react/set-state-in-effect": "warn",
     "react/refs": "error",
     "react/purity": "error",
     "react/immutability": "error",

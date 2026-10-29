@@ -45,12 +45,14 @@ function formatBuildTs(): string {
  *   { page: <page> }                  for #page=<name>
  *   null                              for unknown/empty hashes
  */
-function parseHash(): { page: Page; auctionId?: string } | null {
+function parseHash(): { page: Page; auctionId?: string; taskId?: string } | null {
   const hash = window.location.hash.slice(1)
   if (!hash) return null
   const params = new URLSearchParams(hash)
   const auctionId = params.get('auction')
   if (auctionId !== null) return { page: 'view', auctionId }
+  const taskId = params.get('task')
+  if (taskId !== null) return { page: 'task', taskId }
   const page = params.get('page') as Page | null
   if (page && NAV.some(n => n.id === page)) return { page }
   return null
@@ -71,8 +73,8 @@ export function consumePendingHashAuctionId(): string | null {
 }
 
 /**
- * Task ID to pre-load in TaskView when the user clicks "View Task" from
- * a finalized auction. Cleared after first read.
+ * Task ID to pre-load in TaskView — set either by clicking "Open Task" in
+ * AuctionView or by a #task=N hash link in the URL. Cleared after first read.
  */
 let _pendingTaskId: string | null = null
 
@@ -88,11 +90,17 @@ export function consumePendingTaskId(): string | null {
   return val
 }
 
+/** Read and clear any hash-provided task ID (one-shot, called by TaskView on mount). */
+export function consumePendingHashTaskId(): string | null {
+  return consumePendingTaskId()
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>(() => {
     const parsed = parseHash()
     if (parsed) {
       if (parsed.auctionId) _pendingHashAuctionId = parsed.auctionId
+      if (parsed.taskId)    _pendingTaskId        = parsed.taskId
       return parsed.page
     }
     return 'view'
@@ -121,6 +129,7 @@ export default function App() {
       const parsed = parseHash()
       if (!parsed) return
       if (parsed.auctionId) _pendingHashAuctionId = parsed.auctionId
+      if (parsed.taskId)    _pendingTaskId        = parsed.taskId
       setPage(parsed.page)
     }
     window.addEventListener('hashchange', onHashChange)
