@@ -39,7 +39,7 @@ import TeAbi from '../../contracts/abi/TaskEscrow.json'
  */
 export type Env = 'testnet' | 'mainnet'
 
-export const ACTIVE_ENV: Env = 'testnet'
+export const ACTIVE_ENV: Env = 'mainnet'
 
 // ─── Per-environment config ────────────────────────────────────────────────
 
@@ -88,9 +88,8 @@ const MAINNET_CONFIG: EnvConfig = {
   explorerBase: 'https://explorer.arc.io',
   usdcAddress: '0x3600000000000000000000000000000000000000',
   usdcDecimals: 6,
-  // TODO: fill these in after mainnet deploy (TaskEscrow first, then BlindRelayAuction)
-  blindRelayAuctionAddress: '0x0000000000000000000000000000000000000000',
-  taskEscrowAddress:        '0x0000000000000000000000000000000000000000',
+  blindRelayAuctionAddress: '0x4670429744a5e82de77e7251593b25f333b8f802',
+  taskEscrowAddress:        '0xd87d260b9284bd2819894859ba877104ee043049',
   gasFloor: 800_000n,
   viemChain: arc,
 }

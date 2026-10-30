@@ -34,10 +34,11 @@ and debugged in Arc Studio.
 |---|---|---|
 | Arc Testnet | TaskEscrow | `0xe7c20bd2834814e160f7cef8fd2cfe8fc6a0f59d` |
 | Arc Testnet | BlindRelayAuction | `0x27bcab80f486030dec9702d287e354a69bab186d` |
-| Arc Mainnet | TaskEscrow | *(not yet deployed — see README mainnet runbook)* |
-| Arc Mainnet | BlindRelayAuction | *(not yet deployed)* |
+| Arc Mainnet | TaskEscrow | `0xd87d260b9284bd2819894859ba877104ee043049` |
+| Arc Mainnet | BlindRelayAuction | `0x4670429744a5e82de77e7251593b25f333b8f802` |
 
 Testnet explorer: https://explorer.testnet.arc.io
+Mainnet explorer: https://explorer.arc.io
 
 ## Example transaction hashes (to fill in)
 

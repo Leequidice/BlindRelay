@@ -37,10 +37,10 @@ task is created automatically on-chain. Built with [Arc Studio](https://studio.a
 
 ### Arc Mainnet
 
-| Contract | Address |
-|---|---|
-| TaskEscrow | *(deploy with `self-deploy.ts` — see Mainnet Runbook below)* |
-| BlindRelayAuction | *(deploy after TaskEscrow)* |
+| Contract | Address | Explorer |
+|---|---|---|
+| TaskEscrow | `0xd87d260b9284bd2819894859ba877104ee043049` | [view](https://explorer.arc.io/address/0xd87d260b9284bd2819894859ba877104ee043049) |
+| BlindRelayAuction | `0x4670429744a5e82de77e7251593b25f333b8f802` | [view](https://explorer.arc.io/address/0x4670429744a5e82de77e7251593b25f333b8f802) |
 
 ---
 
