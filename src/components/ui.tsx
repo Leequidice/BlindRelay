@@ -251,22 +251,24 @@ export function Spinner({ size = 16 }: { size?: number }) {
 
 export function WrongChainBanner({
   chainName,
+  chainId,
   onSwitch,
 }: {
   chainName: string
+  chainId: number
   onSwitch: () => void
 }) {
   return (
     <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 px-4 py-3 bg-amber-500 text-white text-sm font-medium shadow-lg">
-      <div className="flex items-center gap-2">
-        <AlertTriangle size={16} />
-        Switch to <strong>{chainName}</strong> to use this app.
+      <div className="flex items-center gap-2 flex-wrap">
+        <AlertTriangle size={16} className="shrink-0" />
+        <span>Switch to <strong>{chainName}</strong> (chain {chainId}) to use this app.</span>
       </div>
       <button
         onClick={onSwitch}
-        className="px-3 py-1 bg-white text-amber-700 rounded-lg text-xs font-semibold hover:bg-amber-50 transition-colors"
+        className="shrink-0 px-3 py-1 bg-white text-amber-700 rounded-lg text-xs font-semibold hover:bg-amber-50 transition-colors"
       >
-        Switch Network
+        Switch to Arc
       </button>
     </div>
   )

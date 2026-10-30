@@ -78,7 +78,7 @@ export default function RevealBid() {
   // Write hook
   const { writeContract: reveal, data: revealHash, isPending, error: revealWriteErr } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmedByWagmi, isError: isDropped, data: revealReceipt } =
-    useWaitForTransactionReceipt({ hash: revealHash })
+    useWaitForTransactionReceipt({ hash: revealHash, chainId: ARC.chainId })
 
   const revealReverted = revealReceipt
     ? (() => { const o = checkReceipt(revealReceipt); if (!o.ok && !revealRevert) setRevealRevert({ message: o.message, txUrl: o.txUrl }); return !o.ok })()

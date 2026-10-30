@@ -238,7 +238,7 @@ function useTaskIdForAuction(
   const [taskId,  setTaskId]  = useState<bigint | null>(null)
   const [scanning, setScanning] = useState(false)
   const [noMatch,  setNoMatch]  = useState(false)
-  const publicClient = usePublicClient()
+  const publicClient = usePublicClient({ chainId: ARC.chainId })
 
   const scan = useCallback(async () => {
     if (!a || a.status !== 1 || isZeroAddress(a.bestBidder) || auctionId === null) return
@@ -346,7 +346,7 @@ export default function AuctionView({ onNavigate }: { onNavigate?: (page: 'task'
   const [withdrawRevert, setWithdrawRevert] = useState<{ message: string; txUrl: string } | null>(null)
   const { writeContract: doWithdraw, data: withdrawHash, isPending: withdrawP, error: withdrawErr } = useWriteContract()
   const { isLoading: withdrawConfirming, isSuccess: withdrawDoneByWagmi, isError: withdrawDropped, data: withdrawReceipt } =
-    useWaitForTransactionReceipt({ hash: withdrawHash })
+    useWaitForTransactionReceipt({ hash: withdrawHash, chainId: ARC.chainId })
   if (withdrawReceipt) {
     const o = checkReceipt(withdrawReceipt)
     if (!o.ok && !withdrawRevert) setWithdrawRevert({ message: o.message, txUrl: o.txUrl })

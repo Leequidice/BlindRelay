@@ -80,14 +80,14 @@ export default function CreateAuction() {
     isSuccess: approveConfirmed,
     isError: approveDropped,
     data: approveReceipt,
-  } = useWaitForTransactionReceipt({ hash: approveHash })
+  } = useWaitForTransactionReceipt({ hash: approveHash, chainId: ARC.chainId })
 
   const {
     isLoading: createConfirming,
     isSuccess: createConfirmedByWagmi,
     isError: createDropped,
     data: createReceipt,
-  } = useWaitForTransactionReceipt({ hash: createHash })
+  } = useWaitForTransactionReceipt({ hash: createHash, chainId: ARC.chainId })
 
   // Derived values
   const taskHash = description.trim() ? keccak256(toHex(description.trim())) : null

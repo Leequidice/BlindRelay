@@ -86,7 +86,7 @@ export default function FinalizeWithdraw() {
     isSuccess: finalizeConfirmedByWagmi,
     isError: finalizeDropped,
     data: finalizeReceipt,
-  } = useWaitForTransactionReceipt({ hash: finalizeHash })
+  } = useWaitForTransactionReceipt({ hash: finalizeHash, chainId: ARC.chainId })
 
   // Write: withdraw
   const { writeContract: withdraw, data: withdrawHash, isPending: withdrawP, error: withdrawError } = useWriteContract()
@@ -95,7 +95,7 @@ export default function FinalizeWithdraw() {
     isSuccess: withdrawConfirmedByWagmi,
     isError: withdrawDropped,
     data: withdrawReceipt,
-  } = useWaitForTransactionReceipt({ hash: withdrawHash })
+  } = useWaitForTransactionReceipt({ hash: withdrawHash, chainId: ARC.chainId })
 
   // Receipt-status checks
   const finalizeReverted = finalizeReceipt

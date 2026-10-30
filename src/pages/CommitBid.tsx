@@ -78,9 +78,9 @@ export default function CommitBid() {
   const { writeContract: approve, data: approveHash, isPending: approveP, error: approveWriteErr } = useWriteContract()
   const { writeContract: commit,  data: commitHash,  isPending: commitP,  error: commitWriteErr  } = useWriteContract()
   const { isLoading: approveConfirming, isSuccess: approveConfirmedByWagmi, isError: approveDropped, data: approveReceipt } =
-    useWaitForTransactionReceipt({ hash: approveHash })
+    useWaitForTransactionReceipt({ hash: approveHash, chainId: ARC.chainId })
   const { isLoading: commitConfirming,  isSuccess: commitConfirmedByWagmi,  isError: commitDropped,  data: commitReceipt  } =
-    useWaitForTransactionReceipt({ hash: commitHash })
+    useWaitForTransactionReceipt({ hash: commitHash, chainId: ARC.chainId })
 
   // ── Allowance pre-flight ──────────────────────────────────────────────────
   // Always compare against the CURRENT bondAmount, not a stale value.

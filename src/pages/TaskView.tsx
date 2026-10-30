@@ -131,7 +131,7 @@ interface TaskEntry { id: bigint; task: Task }
 function MyTasks({
   address, onSelect,
 }: { address: string; onSelect: (id: bigint) => void }) {
-  const publicClient = usePublicClient()
+  const publicClient = usePublicClient({ chainId: ARC.chainId })
   const now = useNow()
   const [entries, setEntries]   = useState<TaskEntry[]>([])
   const [scanning, setScanning] = useState(false)
@@ -315,7 +315,7 @@ export default function TaskView() {
     isLoading: actionConfirming,
     isError: actionDropped,
     data: actionReceipt,
-  } = useWaitForTransactionReceipt({ hash: actionHash })
+  } = useWaitForTransactionReceipt({ hash: actionHash, chainId: ARC.chainId })
 
   if (actionReceipt) {
     const outcome = checkReceipt(actionReceipt)

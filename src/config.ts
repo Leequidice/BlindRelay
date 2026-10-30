@@ -2,32 +2,35 @@
  * wagmi configuration
  * Built with Arc Studio — https://studio.arc.io
  *
- * Chain, RPC, contract addresses and explorer URLs live in src/lib/blindrelay.ts.
- * Switch between testnet and mainnet by changing ACTIVE_ENV there.
+ * Chain order, RPC URLs, contract addresses and explorer URLs are all derived
+ * from CHAIN_CONFIG in src/lib/blindrelay.ts.  Switch ACTIVE_ENV there to flip
+ * every file between testnet and mainnet in one place.
  */
 
 import { http, createConfig } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
 import { arcTestnet, arc } from 'viem/chains'
 import { injected } from 'wagmi/connectors'
+import { CHAIN_CONFIG } from './lib/blindrelay'
 import { registerChain } from './tracing'
 
-// Pre-register chain RPC URLs so trace events show correct chain names immediately
+// Pre-register chain RPC URLs so trace events show correct chain names immediately.
 registerChain(arcTestnet.id, 'https://rpc.testnet.arc.io')
 registerChain(arc.id, 'https://rpc.mainnet.arc.io')
 
 /**
- * Both Arc Testnet and Arc mainnet are included so the app works when
- * ACTIVE_ENV is switched in src/lib/blindrelay.ts without rebuilding the
- * wagmi config. The injected() connector supports MetaMask, Rabby, and any
- * EIP-1193 browser wallet without a WalletConnect project ID.
+ * The active chain (matching CHAIN_CONFIG.chainId) is listed first so wagmi's
+ * usePublicClient() with no explicit chainId always resolves to the configured
+ * network.  The other Arc chain is kept in the list so the wrong-network banner
+ * and switchChain() can target it, and mainnet is retained for ENS resolution.
  *
  * WalletConnect is NOT used — injected wallets work without a project ID.
- * If you want WalletConnect support, add walletConnect({ projectId: '...' })
- * to the connectors array and supply VITE_WC_PROJECT_ID in .env.
  */
+const activeChain   = CHAIN_CONFIG.chainId === arc.id ? arc : arcTestnet
+const inactiveChain = CHAIN_CONFIG.chainId === arc.id ? arcTestnet : arc
+
 export const config = createConfig({
-  chains: [arcTestnet, arc, mainnet],
+  chains: [activeChain, inactiveChain, mainnet],
   connectors: [
     injected(), // MetaMask, Rabby, Coinbase Wallet, etc. — no project ID needed
   ],

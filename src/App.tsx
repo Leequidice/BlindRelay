@@ -14,12 +14,12 @@ import TaskView from './pages/TaskView'
 type Page = 'create' | 'view' | 'commit' | 'reveal' | 'finalize' | 'task'
 
 const NAV: { id: Page; label: string }[] = [
-  { id: 'create', label: 'Create' },
-  { id: 'view',   label: 'Auction' },
-  { id: 'commit', label: 'Commit' },
-  { id: 'reveal', label: 'Reveal' },
+  { id: 'create',   label: 'Create' },
+  { id: 'view',     label: 'Auction' },
+  { id: 'commit',   label: 'Commit' },
+  { id: 'reveal',   label: 'Reveal' },
   { id: 'finalize', label: 'Finalize' },
-  { id: 'task',   label: 'Task' },
+  { id: 'task',     label: 'Task' },
 ]
 
 const TARGET_CHAIN = CHAIN_CONFIG.chainId
@@ -42,6 +42,7 @@ function formatBuildTs(): string {
 /**
  * Parse the hash fragment. Returns:
  *   { page: 'view', auctionId: '42' } for #auction=42
+ *   { page: 'task', taskId: '5' }     for #task=5
  *   { page: <page> }                  for #page=<name>
  *   null                              for unknown/empty hashes
  */
@@ -60,8 +61,7 @@ function parseHash(): { page: Page; auctionId?: string; taskId?: string } | null
 
 /**
  * External auction ID to pre-load in AuctionView, set by hash routing.
- * We use a module-level variable (not state) so AuctionView can read it
- * without prop-drilling, then clear it after first use.
+ * Module-level so AuctionView can read it without prop-drilling, cleared after first use.
  */
 let _pendingHashAuctionId: string | null = null
 
@@ -98,31 +98,49 @@ export function consumePendingHashTaskId(): string | null {
 // ─── Contract guard ──────────────────────────────────────────────────────────
 //
 // Checks two things before any writes are allowed:
-//   1. Neither configured contract address is the zero address.
-//   2. Both contracts have deployed bytecode on the active chain (eth_getCode ≠ "0x").
+//   1. Neither configured contract address is the zero address (static, no RPC).
+//   2. Both contracts have deployed bytecode on the configured chain (eth_getCode ≠ "0x").
 //
-// While checking: contractsOk = null (loading).
-// On failure:     contractsOk = { ok: false, reason: '...' }.
-// On success:     contractsOk = { ok: true }.
+// usePublicClient({ chainId }) pins the client to the CONFIGURED chain so the
+// guard always checks the right network regardless of which chain the wallet is on.
+//
+// States:
+//   null                           — checking (loading)
+//   { ok: true }                   — contracts present, writes allowed
+//   { ok: false; reason; rpcUrl }  — hard config error (zero address)
+//   { ok: 'warn'; reason; rpcUrl } — RPC reachable but code empty, or RPC unreachable —
+//                                    non-blocking: app still usable, banner shown
 
-type GuardResult = { ok: true } | { ok: false; reason: string } | null
+type GuardResult =
+  | null
+  | { ok: true }
+  | { ok: false; reason: string; rpcUrl: string }
+  | { ok: 'warn'; reason: string; rpcUrl: string }
 
 function useContractGuard(): GuardResult {
-  const publicClient = usePublicClient()
+  // Pin to the configured chain — never follows the wallet's active chain
+  const publicClient = usePublicClient({ chainId: TARGET_CHAIN })
   const [result, setResult] = useState<GuardResult>(null)
 
   const check = useCallback(async () => {
-    const bra = CHAIN_CONFIG.blindRelayAuctionAddress
-    const te  = CHAIN_CONFIG.taskEscrowAddress
+    const bra    = CHAIN_CONFIG.blindRelayAuctionAddress
+    const te     = CHAIN_CONFIG.taskEscrowAddress
+    const rpcUrl = CHAIN_CONFIG.rpcUrl
 
-    // 1. Zero-address check (static, no RPC needed)
+    // 1. Zero-address check — static, no RPC needed, hard error
     if (isZeroAddress(bra) || isZeroAddress(te)) {
-      setResult({ ok: false, reason: `Contract address not configured for ${CHAIN_CONFIG.chainName}.` })
+      setResult({
+        ok: false,
+        reason: `A contract address is not configured for ${CHAIN_CONFIG.chainName}. ` +
+                `Check ACTIVE_ENV and the address fields in src/lib/blindrelay.ts.`,
+        rpcUrl,
+      })
       return
     }
+
     if (!publicClient) return  // wagmi not ready yet
 
-    // 2. eth_getCode check
+    // 2. eth_getCode check — non-blocking on failure
     try {
       const [braBytecode, teBytecode] = await Promise.all([
         publicClient.getCode({ address: bra }),
@@ -133,28 +151,36 @@ function useContractGuard(): GuardResult {
       if (braEmpty || teEmpty) {
         const missing = [braEmpty && 'BlindRelayAuction', teEmpty && 'TaskEscrow']
           .filter(Boolean).join(' and ')
+        // Non-blocking warning — the user can still browse reads, just not write
         setResult({
-          ok: false,
-          reason: `${missing} ${braEmpty && teEmpty ? 'have' : 'has'} no bytecode on ${CHAIN_CONFIG.chainName} (chain ${CHAIN_CONFIG.chainId}). The contract may not be deployed on this network.`,
+          ok: 'warn',
+          reason: `${missing} returned no bytecode on ${CHAIN_CONFIG.chainName} ` +
+                  `(chain ${CHAIN_CONFIG.chainId}). The contract may not be deployed on this network.`,
+          rpcUrl,
         })
         return
       }
       setResult({ ok: true })
-    } catch (e) {
-      // RPC error — be optimistic rather than blocking the user on a transient failure
-      setResult({ ok: true })
-      console.warn('Contract guard RPC check failed:', e)
+    } catch {
+      // RPC unreachable — non-blocking warning so a transient outage doesn't break the app
+      setResult({
+        ok: 'warn',
+        reason: `Could not reach the ${CHAIN_CONFIG.chainName} RPC to verify contracts. ` +
+                `Reads may fail. Writes are still enabled.`,
+        rpcUrl,
+      })
     }
   }, [publicClient])
 
+  // scan() is async — setState fires after await. eslint-disable-next-line react/set-state-in-effect
   useEffect(() => { void check() }, [check])
 
   return result
 }
 
-// ─── ContractErrorScreen ─────────────────────────────────────────────────────
+// ─── ContractErrorScreen — hard config error only (zero address) ──────────────
 
-function ContractErrorScreen({ reason }: { reason: string }) {
+function ContractErrorScreen({ reason, rpcUrl }: { reason: string; rpcUrl: string }) {
   return (
     <div className="min-h-dvh bg-gradient-to-br from-slate-50 to-red-50/30 flex items-center justify-center px-4">
       <div className="max-w-lg w-full bg-white rounded-2xl border border-red-200 shadow-lg p-8 space-y-5">
@@ -165,42 +191,62 @@ function ContractErrorScreen({ reason }: { reason: string }) {
                 stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-red-800">Contract not available</h1>
+          <h1 className="text-lg font-bold text-red-800">Configuration error</h1>
         </div>
 
         <p className="text-sm text-slate-600">{reason}</p>
 
         <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-xs font-mono text-slate-500">
-          <div className="flex justify-between gap-2">
-            <span className="text-slate-400">Network</span>
+          <div className="flex justify-between gap-2 flex-wrap">
+            <span className="text-slate-400 shrink-0">Network</span>
             <span className="font-semibold text-slate-700">{CHAIN_CONFIG.chainName} (chain {CHAIN_CONFIG.chainId})</span>
           </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-slate-400">Auction</span>
-            <a
-              href={`${CHAIN_CONFIG.explorerBase}/address/${CHAIN_CONFIG.blindRelayAuctionAddress}`}
+          <div className="flex justify-between gap-2 flex-wrap">
+            <span className="text-slate-400 shrink-0">RPC</span>
+            <span className="text-slate-600 break-all">{rpcUrl}</span>
+          </div>
+          <div className="flex justify-between gap-2 flex-wrap">
+            <span className="text-slate-400 shrink-0">Auction</span>
+            <a href={`${CHAIN_CONFIG.explorerBase}/address/${CHAIN_CONFIG.blindRelayAuctionAddress}`}
               target="_blank" rel="noopener noreferrer"
-              className="text-blue-600 hover:underline truncate max-w-xs"
-            >
+              className="text-blue-600 hover:underline break-all">
               {CHAIN_CONFIG.blindRelayAuctionAddress}
             </a>
           </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-slate-400">Escrow</span>
-            <a
-              href={`${CHAIN_CONFIG.explorerBase}/address/${CHAIN_CONFIG.taskEscrowAddress}`}
+          <div className="flex justify-between gap-2 flex-wrap">
+            <span className="text-slate-400 shrink-0">Escrow</span>
+            <a href={`${CHAIN_CONFIG.explorerBase}/address/${CHAIN_CONFIG.taskEscrowAddress}`}
               target="_blank" rel="noopener noreferrer"
-              className="text-blue-600 hover:underline truncate max-w-xs"
-            >
+              className="text-blue-600 hover:underline break-all">
               {CHAIN_CONFIG.taskEscrowAddress}
             </a>
           </div>
         </div>
 
-        <p className="text-xs text-slate-400">
-          All write actions are disabled. Connect to {CHAIN_CONFIG.chainName} to continue,
-          or check the contract addresses in the configuration.
-        </p>
+        <p className="text-xs text-slate-400">All actions are disabled until the addresses are configured.</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── ContractWarningBanner — non-blocking RPC / bytecode warning ──────────────
+
+function ContractWarningBanner({ reason, rpcUrl }: { reason: string; rpcUrl: string }) {
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
+      <div className="max-w-2xl mx-auto flex items-start gap-2 text-sm text-amber-800">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5">
+          <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span>
+          <span className="font-medium">Contract check: </span>
+          {reason}
+          {' '}
+          <span className="text-xs text-amber-600 font-mono">
+            (chain {CHAIN_CONFIG.chainId} · {rpcUrl})
+          </span>
+        </span>
       </div>
     </div>
   )
@@ -223,17 +269,13 @@ export default function App() {
 
   const wrongChain    = isConnected && chainId !== TARGET_CHAIN
   const walletMissing = !hasInjectedWallet()
-  const contractsOk   = guard === null ? null : guard.ok  // null=loading, true=ok, false=error
 
   // Keep URL hash in sync with current page
   useEffect(() => {
     const current = window.location.hash
     const expected = `#page=${page}`
-    // Don't clobber an #auction= link we just navigated from
     if (current && current.startsWith('#auction=') && page === 'view') return
-    if (current !== expected) {
-      window.history.replaceState(null, '', expected)
-    }
+    if (current !== expected) window.history.replaceState(null, '', expected)
   }, [page])
 
   // Handle browser back/forward and external hash links
@@ -254,18 +296,47 @@ export default function App() {
     window.history.pushState(null, '', `#page=${p}`)
   }
 
-  // Contract not deployed on this chain — show full-page error, all writes disabled
-  if (guard !== null && !guard.ok) {
-    return <ContractErrorScreen reason={guard.reason} />
+  /**
+   * Try wagmi's switchChain first. If the chain isn't in the wallet's known
+   * list (common on fresh installs), fall back to wallet_addEthereumChain so
+   * the wallet can add Arc mainnet automatically.
+   */
+  function handleSwitchChain() {
+    try {
+      switchChain({ chainId: TARGET_CHAIN })
+    } catch {
+      // switchChain rejected (chain not in wallet) — try wallet_addEthereumChain as fallback
+      const w = window as { ethereum?: { request?: (a: { method: string; params: unknown[] }) => Promise<unknown> } }
+      if (!w.ethereum?.request) return
+      void w.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId:           `0x${TARGET_CHAIN.toString(16)}`,
+          chainName:         CHAIN_CONFIG.chainName,
+          nativeCurrency:    { name: 'USDC', symbol: 'USDC', decimals: 6 },
+          rpcUrls:           [CHAIN_CONFIG.rpcUrl],
+          blockExplorerUrls: [CHAIN_CONFIG.explorerBase],
+        }],
+      }).catch(() => { /* user declined — nothing more to do */ })
+    }
   }
+
+  // Hard config error — zero address: full-page block, nothing usable
+  if (guard !== null && guard.ok === false) {
+    return <ContractErrorScreen reason={guard.reason} rpcUrl={guard.rpcUrl} />
+  }
+
+  // While guard is null (first check in flight) OR wrongChain: disable writes
+  const disableWrites = guard === null || wrongChain
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-slate-50 to-blue-50/30 font-body">
-      {/* Wrong-chain banner */}
+      {/* Wrong-chain banner — blocks writes, offers switch with wallet_addEthereumChain fallback */}
       {wrongChain && (
         <WrongChainBanner
           chainName={CHAIN_CONFIG.chainName}
-          onSwitch={() => switchChain({ chainId: TARGET_CHAIN })}
+          chainId={TARGET_CHAIN}
+          onSwitch={handleSwitchChain}
         />
       )}
 
@@ -273,10 +344,8 @@ export default function App() {
       {walletMissing && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
-            <path
-              d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-              stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            />
+            <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="text-sm text-amber-800 font-medium">
             No wallet detected.{' '}
@@ -288,6 +357,11 @@ export default function App() {
             {' '}to interact with BlindRelay.
           </span>
         </div>
+      )}
+
+      {/* Non-blocking contract warning (RPC unreachable or bytecode empty) */}
+      {guard !== null && guard.ok === 'warn' && !wrongChain && (
+        <ContractWarningBanner reason={guard.reason} rpcUrl={guard.rpcUrl} />
       )}
 
       {/* Header */}
@@ -328,12 +402,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main content — each page has its own ErrorBoundary so one tab's crash
-          doesn't take down the others. The outer ErrorBoundary catches anything
-          that escapes (e.g. a crash in the nav itself).
-          Writes are also disabled while the contract guard is still loading (contractsOk=null). */}
-      <main className="pb-20">
-        <div className={(wrongChain || contractsOk === null) ? 'pointer-events-none opacity-60 select-none' : ''}>
+      {/* Main content */}
+      <main className="pb-24">
+        <div className={disableWrites ? 'pointer-events-none opacity-60 select-none' : ''}>
           <ErrorBoundary>
             {page === 'create'   && <ErrorBoundary><CreateAuction /></ErrorBoundary>}
             {page === 'view'     && <ErrorBoundary><AuctionView onNavigate={navigate} /></ErrorBoundary>}
@@ -362,9 +433,7 @@ export default function App() {
               target="_blank" rel="noopener noreferrer"
               className="font-mono hover:text-slate-600 underline truncate max-w-[160px] sm:max-w-none"
               title={CHAIN_CONFIG.blindRelayAuctionAddress}
-            >
-              {CHAIN_CONFIG.blindRelayAuctionAddress}
-            </a>
+            >{CHAIN_CONFIG.blindRelayAuctionAddress}</a>
             <span className="text-slate-300 hidden sm:inline">·</span>
             <span className="text-slate-300">Escrow:</span>
             <a
@@ -372,9 +441,7 @@ export default function App() {
               target="_blank" rel="noopener noreferrer"
               className="font-mono hover:text-slate-600 underline truncate max-w-[160px] sm:max-w-none"
               title={CHAIN_CONFIG.taskEscrowAddress}
-            >
-              {CHAIN_CONFIG.taskEscrowAddress}
-            </a>
+            >{CHAIN_CONFIG.taskEscrowAddress}</a>
           </div>
         </div>
       </footer>
